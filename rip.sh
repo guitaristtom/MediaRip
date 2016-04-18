@@ -1,20 +1,14 @@
 #!/bin/bash
 
-# Exit Codes
-# 1 : vobcopy failed
-# 2 : encoding failed
-# 3 : lock file present
-# 4 : DVD not mounted
-# 5 : VIDEO_TS not present - probably not a video DVD
+USER_HOME="$(eval echo ~${SUDO_USER})"
+STORAGE_DIR="${USER_HOME}/rips" # Location to store Vobs
+MOVIES_DIR="${STORAGE_DIR}/movies" # Location to place encoded videos
+TMP_DIR="${STORAGE_DIR}/tmp" # Location to store vobs
+LOCK_FILE="${STORAGE_DIR}/rip.lock" # Lock File
 
-VOB_DIR="/storage/movies/dvdrip/ripdvd/vobs" # Location to store vobs
-ATV2_DIR="/storage/movies" # Location to place ATV2 encoded videos
-IPAD_DIR="/storage/ipad" # Location to place iPad encoded videos
-DVD_DIR="/media/cdrom" # Mount location of dvd
-DVD_DEV="/dev/sr0" # DVD Device
-LOCK_FILE="/storage/movies/dvdrip/ripdvd/ripdvd.lock" # Lock File
-EMAIL="rob@cookfam.net" # Email address for notification
-SUBJECT="Rip & Encode Complete" # Subject of notification email
+DRIVE_DIR="/media/cdrom" # Mount location of dvd
+DRIVE_DEV="/dev/sr0" # DVD Device
+
 
 # Only run if not already running
 if [ -f "${LOCK_FILE}" ]; then
@@ -24,7 +18,7 @@ fi
 
 touch "${LOCK_FILE}"
 
-mount | grep "${DVD_DIR}" || mount "${DVD_DEV}" "${DVD_DIR}"
+mount | grep "${DRIVE_DIR}" || mount "${DRIVE_DEV}" "${DRIVE_DIR}"
 if [ $? -ne 0 ]; then
    # dvd not mounted
    echo "*** DVD not mounted"
@@ -32,9 +26,9 @@ if [ $? -ne 0 ]; then
    exit 4
 fi
 
-sleep 30;
+sleep 15;
 
-if [ ! -d "${DVD_DIR}/VIDEO_TS" ]; then
+if [ ! -d "${DRIVE_DIR}/VIDEO_TS" ]; then
    # not a video dvd?
    echo "*** VIDEO_TS directory not present"
    rm "${LOCK_FILE}"
@@ -44,60 +38,34 @@ fi
 
 DVD_NAME="$(vobcopy -I 2>&1 > /dev/stdout | grep DVD-name | sed -e 's/.*DVD-name: //')"
 
-vobcopy -m -o "${VOB_DIR}" -i "${DVD_DIR}"
+vobcopy -m -f -o"${TMP_DIR}" -i "${DRIVE_DIR}"
 if [ $? -ne 0 ]; then
-   # vobcopy failed
+   # vobcopy failed1
    echo "*** Error during vob copy" 
-   rm -rf "${VOB_DIR}/${DVD_NAME}"
+   rm -rf "${TMP_DIR}/${DVD_NAME}"
    rm "${LOCK_FILE}"
    exit 1
 fi
 
-
 ATV2_NAME="${DVD_NAME}"
 INC=""
-while [ -f "${ATV2_DIR}/${ATV2_NAME}${INC}.mp4" ]; do ((INC=INC+1)); done;
+while [ -f "${MOVIES_DIR}/${ATV2_NAME}${INC}.mp4" ]; do ((INC=INC+1)); done;
 if [ -n "${INC}" ]; then MP4_NAME="${ATV2_NAME}${INC}"; fi
 
-HandBrakeCLI -i "${VOB_DIR}/${DVD_NAME}/" -o "${ATV2_DIR}/${ATV2_NAME}.mp4" --preset="AppleTV 2" 
+HandBrakeCLI -v -i "${TMP_DIR}/${DVD_NAME}/" -o "${MOVIES_DIR}/${ATV2_NAME}.mp4" --preset="AppleTV 2" 
 if [ $? -ne 0 ]; then
    # encoding failed
    echo "*** Error during encoding"
-   rm -rf "${VOB_DIR}/${DVD_NAME}"
-   rm "${ATV2_DIR}/${MP4_NAME}.mp4"
+   rm -rf "${TMP_DIR}/${DVD_NAME}"
+   rm "${MOVIES_DIR}/${MP4_NAME}.mp4"
    rm "${LOCK_FILE}"
    exit 2
 fi
 
-#Comment out the following if you don't need to double encode
+rm -rf "${TMP_DIR}/${DVD_NAME}"
 
-sleep 60;
-
-IPAD_NAME="${DVD_NAME}"
-INC=""
-while [ -f "${IPAD_DIR}/${IPAD_NAME}${INC}.mp4" ]; do ((INC=INC+1)); done;
-if [ -n "${INC}" ]; then MP4_NAME="${IPAD_NAME}${INC}"; fi
-
-HandBrakeCLI -i "${VOB_DIR}/${DVD_NAME}/" -o "${IPAD_DIR}/${IPAD_NAME}.mp4" --preset="iPad"
-if [ $? -ne 0 ]; then
-        # encoding failed
-        echo "*** Error during encoding"
-        rm -rf "${VOB_DIR}/${DVD_NAME}"
-        rm "${IPAD_DIR}/${MP4_NAME}.mp4"
-        rm "${LOCK_FILE}"
-        exit 2
-fi
-
-#Comment out above code if you don't need to double encode
-
-rm -rf "${VOB_DIR}/${DVD_NAME}"
-
-umount "${DVD_DIR}" && eject "${DVD_DEV}"
+umount "${DRIVE_DIR}" && eject "${DRIVE_DEV}"
 
 rm "${LOCK_FILE}"
 
-echo "\n\nRip of ${DVD_NAME} completed.\nEncoded to ${ATV2_DIR}/${MP4_NAME}.mp4 and ${IPAD_DIR}/${MP4_NAME}.mp4" >>$MAILTEMP
-
-mail -s "$SUBJECT" "$EMAIL" < $MAILTEMP
-
-rm -f $MAILTEMP
+echo "Rip of ${DVD_NAME} completed.\nEncoded to ${MOVIES_DIR}/${MP4_NAME}.mp4"
