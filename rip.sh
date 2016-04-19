@@ -38,7 +38,7 @@ fi
 
 DVD_NAME="$(vobcopy -I 2>&1 > /dev/stdout | grep DVD-name | sed -e 's/.*DVD-name: //')"
 
-vobcopy -m -f -o"${TMP_DIR}" -i "${DRIVE_DIR}"
+vobcopy -m -o "${TMP_DIR}" -i "${DRIVE_DIR}"
 if [ $? -ne 0 ]; then
    # vobcopy failed1
    echo "*** Error during vob copy" 
@@ -52,7 +52,11 @@ INC=""
 while [ -f "${MOVIES_DIR}/${ATV2_NAME}${INC}.mp4" ]; do ((INC=INC+1)); done;
 if [ -n "${INC}" ]; then MP4_NAME="${ATV2_NAME}${INC}"; fi
 
-HandBrakeCLI -v -i "${TMP_DIR}/${DVD_NAME}/" -o "${MOVIES_DIR}/${ATV2_NAME}.mp4" --preset="AppleTV 2" 
+#HandBrakeCLI -v -i "${TMP_DIR}/${DVD_NAME}/" -o "${MOVIES_DIR}/${ATV2_NAME}.mp4" -e x265 -q 20 -B 160
+#HandBrakeCLI -v -i "${TMP_DIR}/${DVD_NAME}/" -o "${MOVIES_DIR}/${ATV2_NAME}.mp4" -e x265 -q 20 -B 320
+HandBrakeCLI -v -i "${TMP_DIR}/${DVD_NAME}/" -o "${MOVIES_DIR}/${ATV2_NAME}.mp4" -e x265 -q 20 -E copy:aac -B auto
+
+
 if [ $? -ne 0 ]; then
    # encoding failed
    echo "*** Error during encoding"
